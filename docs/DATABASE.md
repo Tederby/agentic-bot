@@ -131,7 +131,7 @@ Stores incoming and outgoing chat history used for sliding-window context retrie
 | `is_from_me`| `INTEGER`| `DEFAULT 0`| 1 if sent by the account owner, 0 otherwise. |
 | `timestamp` | `INTEGER`| `NOT NULL` | Unix timestamp in seconds. |
 
-*Indexes:* `idx_chat_messages_lookup ON chat_messages(chat_jid, timestamp DESC)`, `idx_chat_messages_quoted ON chat_messages(quoted_id)`
+*Indexes:* `idx_chat_messages_lookup ON chat_messages(chat_jid, timestamp DESC)`, `idx_chat_messages_quoted ON chat_messages(quoted_id)`, `idx_chat_messages_timestamp ON chat_messages(timestamp)`
 
 ---
 

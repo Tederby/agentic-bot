@@ -404,22 +404,27 @@ function handleConnectionUpdate(update, sock) {
 }
 
 function handleMessageUpsert(upsert, sock) {
-  const message = Messages(upsert, sock);
-  if (!message) return;
+  if (!upsert || !Array.isArray(upsert.messages)) return;
 
-  if (upsert.type !== "notify") {
-    if (!(upsert.type === "append" && message.key && message.key.fromMe)) {
-      return;
+  for (const rawMsg of upsert.messages) {
+    const singleUpsert = { ...upsert, messages: [rawMsg] };
+    const message = Messages(singleUpsert, sock);
+    if (!message) continue;
+
+    if (upsert.type !== "notify") {
+      if (!(upsert.type === "append" && message.key && message.key.fromMe)) {
+        continue;
+      }
+      // Don't process stale append messages (history sync)
+      const now = Math.floor(Date.now() / 1000);
+      if (now - message.messageTimestamp > 60) continue;
     }
-    // Don't process stale append messages (history sync)
-    const now = Math.floor(Date.now() / 1000);
-    if (now - message.messageTimestamp > 60) return;
+
+    if (message.key && message.key.remoteJid === "status@broadcast") continue;
+
+    // fromMe is allowed so the bot owner can process their own commands
+    msgHandler(singleUpsert, sock, message);
   }
-
-  if (message.key && message.key.remoteJid === "status@broadcast") return;
-
-  // fromMe is allowed so the bot owner can process their own commands
-  msgHandler(upsert, sock, message);
 }
 
 // ── Call Dedup (prevents Baileys from firing multiple events per call) ──────

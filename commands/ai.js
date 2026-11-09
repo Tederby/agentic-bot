@@ -23,7 +23,7 @@ export default {
     aliases: ["agent", "userbot"],
     category: "ai",
     description: "Control AI persona and userbot automation settings.",
-    usage: "!ai <status|on|off|chat on|chat off|mode|ignore>",
+    usage: "!ai <status|on|off|chat on|chat off|mode|ignore|persona>",
     ownerOnly: true,
 
     async handler({ message, args, isGroup, chat, prefix, commandName }) {
@@ -141,6 +141,50 @@ export default {
             return message.reply(`❌ Subcommand ignore tidak valid. Gunakan: add, del, atau list.`);
         }
 
+        // ── 6. Persona Management ───────────────────────────────────
+        if (sub === "persona") {
+            const action = (args[1] || "").toLowerCase();
+            const chatSettings = getAiChatSettings(chat);
+            const globalPersona = getAiGlobalConfig("default_persona", "(Default bawaan kode)");
+
+            if (!action || action === "show" || action === "status") {
+                let text = `🎭 *PENGATURAN PERSONA AI*\n`;
+                text += `────────────────────────\n`;
+                text += `*Global Persona:*\n${globalPersona}\n\n`;
+                text += `*Chat Ini:*\n${chatSettings?.custom_persona || "(Menggunakan Global Persona)"}\n`;
+                text += `────────────────────────\n`;
+                text += `⋄ Ubah persona chat: \`${prefix}${commandName} persona set <teks>\`\n`;
+                text += `⋄ Reset persona chat: \`${prefix}${commandName} persona reset\`\n`;
+                text += `⋄ Ubah persona global: \`${prefix}${commandName} persona global <teks>\``;
+                return message.reply(text);
+            }
+
+            if (action === "set") {
+                const newPersona = args.slice(2).join(" ").trim();
+                if (!newPersona) {
+                    return message.reply(`❌ Masukkan teks persona baru.\nContoh: \`${prefix}${commandName} persona set Kamu adalah asisten ahli coding.\``);
+                }
+                setAiChatSettings(chat, { custom_persona: newPersona });
+                return message.reply(`✅ *Persona khusus berhasil disetel untuk chat ini:*\n"${newPersona}"`);
+            }
+
+            if (action === "reset") {
+                setAiChatSettings(chat, { custom_persona: null });
+                return message.reply(`✅ *Persona chat ini di-reset* (kembali mengikuti persona global).`);
+            }
+
+            if (action === "global") {
+                const newGlobal = args.slice(2).join(" ").trim();
+                if (!newGlobal) {
+                    return message.reply(`❌ Masukkan teks persona global baru.`);
+                }
+                setAiGlobalConfig("default_persona", newGlobal);
+                return message.reply(`✅ *Persona global default berhasil diperbarui:*\n"${newGlobal}"`);
+            }
+
+            return message.reply(`❌ Aksi persona tidak valid. Gunakan: \`${prefix}${commandName} persona [set|reset|global]\``);
+        }
+
         // ── Help Fallback ───────────────────────────────────────────
         const helpText = 
 `📖 *PANDUAN COMMAND ${prefix}${commandName.toUpperCase()}*
@@ -149,6 +193,7 @@ export default {
 ⋄ \`${prefix}${commandName} on / off\` : Saklar master global
 ⋄ \`${prefix}${commandName} chat on / off\` : Saklar khusus chat ini
 ⋄ \`${prefix}${commandName} mode <trigger|command>\` : Sensitivitas pemicu
+⋄ \`${prefix}${commandName} persona [set|reset|global]\` : Kustomisasi persona
 ⋄ \`${prefix}${commandName} ignore add @user\` : Abaikan user di grup
 ⋄ \`${prefix}${commandName} ignore del @user\` : Batal abaikan user
 ⋄ \`${prefix}${commandName} ignore list\` : Lihat daftar abaikan`;

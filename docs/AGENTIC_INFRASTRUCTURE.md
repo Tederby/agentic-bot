@@ -98,14 +98,18 @@ WhatsApp group chats are non-linear (multiple conversations occur concurrently v
 1. **15-Message Chronological Sliding Window**: Extracts the most recent 15 messages for the active chat.
 2. **Local Reference Indexing**: Assigns sequential IDs (`#1`, `#2`, ..., `#15`).
 3. **Thread Tagging**: If message `#4` quotes message `#1`, it is serialized as `#4 | 17:06 | User [Reply #1]: "Text"`.
-4. **Out-of-Window Reference Recovery**: If a user replies to a message sent hours earlier (outside the 15-message window), the builder queries `chat_messages` via `quoted_id` and prefixes it as `#Ref | [Out-of-window message]`.
-5. **Zero-Download Media Representations**: Avoids latency and bandwidth bottlenecks by serializing media into metadata tags (`[Mengirim foto: "caption"]`, `[Mengirim stiker]`).
+4. **Enhanced Out-of-Window Reference Recovery & Ancestor Chaining**:
+   - If a quoted message is found in SQLite outside the 15-message window, it traverses up to 2 parent hops (`#Ref-2`, `#Ref-1`, `#Ref`) to provide a complete conversation thread.
+   - **In-Memory Protobuf Fallback**: If the quoted message is not in SQLite (e.g. older than the 48-hour pruning cycle or sent before the bot was initialized), the builder falls back directly to the in-memory `triggerMessage.quoted` payload delivered by WhatsApp, ensuring quote context is never lost.
+5. **Debounce Quote Preservation**: Scans all accumulated bubbles in a debounce window so that replying to a message followed by quick follow-up texts retains the reply target.
+6. **Zero-Download Media Representations**: Avoids latency and bandwidth bottlenecks by serializing media into metadata tags (`[Mengirim foto: "caption"]`, `[Mengirim stiker]`).
 
 ### B. Per-Chat Debounce & FIFO Mutex Queue ([`lib/aiQueue.js`](../lib/aiQueue.js))
 Human WhatsApp users often send multiple short messages in rapid succession ("P", "Bro", "Where are you?").
 * **Debounce Buffer (3.5s)**: Accumulates consecutive messages from a chat into a single aggregated prompt.
-* **FIFO Mutex Lock**: Ensures only one `agy` inference runs per chat at any time. New triggers queue in memory without race conditions.
-* **WhatsApp Presence Simulation**: Automatically triggers `sock.sendPresenceUpdate('composing', chatJid)` during processing, resetting to `'paused'` upon completion.
+* **FIFO Mutex Lock**: Ensures only one `agy` inference runs per chat at any time. New triggers queue in memory without race conditions. Prunes empty queue keys automatically to prevent memory leaks.
+* **WhatsApp Presence Simulation**: Automatically triggers `sock.sendPresenceUpdate('composing', chatJid)` with an 8-second recurring heartbeat during processing, resetting to `'paused'` upon completion.
+* **Instant Bot Response Persistence**: Immediately logs the bot's own response into `chat_messages` upon dispatch for instant context synchronization.
 * **Manual Interrupt (Override)**: If the account owner types a message manually (`fromMe: true`) in that chat, any pending debounce timer is cleared and any active `agy` child process is immediately terminated via `AbortController`.
 
 ### C. Antigravity CLI Bridge ([`services/aiEngine.js`](../services/aiEngine.js))
@@ -116,15 +120,17 @@ Connects the bot to the local Google Antigravity binary:
   ```
 * **Cross-Platform Compatibility**:
   - **Linux VPS (Production)**: Uses `agy` directly from system PATH or the `AGY_BIN_PATH` environment variable.
-  - **Windows (Local IDE)**: Automatically resolves to `C:\Users\user\.gemini\bin\agy.exe`.
+  - **Windows (Development)**: Dynamically resolves `agy.exe` via `%USERPROFILE%\.gemini\bin\agy.exe`.
+* **CLI Buffer Protection**: Protects against Windows `CreateProcess` 32,767 character limits by safely truncating oversized context prompts (>25KB).
 * **Isolated Sandbox Directory**: The CLI executes inside `temp/`, preventing accidental modification or indexing of bot source code during casual chat inference.
 
 ### D. Userbot Command Master ([`commands/ai.js`](../commands/ai.js))
 Control interface restricted to the bot owner (`ownerOnly: true`):
-* `!ai status`: Inspects global status, chat switch, active mode, and ignored members.
+* `!ai status`: Inspects global status, chat switch, active mode, persona, and ignored members.
 * `!ai on` / `!ai off`: Master switch enabling/disabling AI functionality globally.
 * `!ai chat on` / `!ai chat off`: Enables/disables AI specifically in the current DM or group.
 * `!ai mode <trigger|command>`: Sets sensitivity (`trigger` responds to tags/replies/DMs; `command` only responds to explicit keywords).
+* `!ai persona [show|set <prompt>|reset|global <prompt>]`: Configures and resets per-chat or global AI personas.
 * `!ai ignore <add|del|list> @user`: Manages the ignore list for specific members in a group.
 
 ---

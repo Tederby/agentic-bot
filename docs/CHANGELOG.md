@@ -4,6 +4,27 @@ All notable changes to **WA-Bot-Engine** are documented in this file. This proje
 
 ---
 
+## [1.3.1] — 2026-11-09
+
+### Added
+- **In-Memory Quoted Protobuf Fallback (`lib/aiContextBuilder.js`)**: Implemented graceful in-memory recovery using `triggerMessage.quoted` when a quoted message is missing from SQLite (e.g. older than 48h or from previous bot sessions).
+- **Multi-Level Ancestor Thread Chaining (`lib/aiContextBuilder.js`)**: Added recursive 2-hop parent traversal (`#Ref-2`, `#Ref-1`, `#Ref`) to reconstruct conversation threads when replying to older messages.
+- **Debounce Context Preservation (`lib/aiQueue.js`)**: Scans all chat bubbles in the 3.5s debounce buffer to preserve quoted message metadata even when follow-up messages lack quotes.
+- **Continuous Typing Presence Heartbeat (`lib/aiQueue.js`)**: Added an 8-second interval renewing WhatsApp `composing` status during long AI inferences.
+- **Instant Bot Response Ingestion (`lib/aiQueue.js`)**: Saves the bot's own AI reply directly into `chat_messages` upon sending to ensure immediate chronological synchronization.
+- **Persona Management Subcommand (`commands/ai.js`)**: Added `!ai persona [show|set <prompt>|reset|global <prompt>]` for per-chat and global persona customization.
+- **Timestamp Index on `chat_messages` (`lib/db.js`)**: Added `idx_chat_messages_timestamp` to optimize the 48-hour periodic message pruning query.
+
+### Fixed
+- **Multi-Bot Claim AI Mention Race Condition (`handler.js`)**: Ensured group messages directly mentioning or replying to a specific bot bypass general multi-bot claiming so targeted AI responses are not swallowed by unmentioned bots.
+- **Batch Message Ingestion (`index.js`)**: Iterates through all elements in `upsert.messages` instead of processing only `messages[0]`, preventing missed messages during batch delivery.
+- **Dynamic Cross-Platform Agy Path Resolution (`services/aiEngine.js`)**: Resolves `%USERPROFILE%\.gemini\bin\agy.exe` dynamically on Windows instead of relying on a hardcoded username.
+- **CLI Command Length Overflow Protection (`services/aiEngine.js`)**: Added guard truncating prompts exceeding 25,000 characters to prevent Windows `CreateProcess` 32KB buffer limits.
+- **Quoted Sender LID Resolution (`lib/Messages.js`)**: Evaluates `m.quoted.key.fromMe` using canonical JID matching via `resolveUserId()` to prevent LID false-negatives.
+- **Queue Memory Leak (`lib/aiQueue.js`)**: Prunes finished, empty chat keys from `chatQueues` Map.
+
+---
+
 ## [1.3.0] — 2026-11-09
 
 ### Added

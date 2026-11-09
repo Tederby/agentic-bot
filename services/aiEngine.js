@@ -21,7 +21,8 @@ export function getAgyBinPath() {
         return process.env.AGY_BIN_PATH;
     }
     if (process.platform === "win32") {
-        const localAgy = "C:\\Users\\user\\.gemini\\bin\\agy.exe";
+        const userProfile = process.env.USERPROFILE || "C:\\Users\\user";
+        const localAgy = path.join(userProfile, ".gemini", "bin", "agy.exe");
         if (fs.existsSync(localAgy)) {
             return localAgy;
         }
@@ -53,8 +54,18 @@ function cleanOutput(text) {
 export function generateAiReply({ prompt, abortSignal, timeout = 45000 }) {
     return new Promise((resolve, reject) => {
         const agyBin = getAgyBinPath();
+
+        // Windows CreateProcess lpCommandLine limit is 32,767 chars
+        let safePrompt = prompt || "";
+        if (process.platform === "win32" && safePrompt.length > 25000) {
+            console.warn(`[AI_ENGINE] Prompt length (${safePrompt.length}) exceeds safe Windows CLI limit. Truncating context.`);
+            const head = safePrompt.slice(0, 5000);
+            const tail = safePrompt.slice(-18000);
+            safePrompt = `${head}\n\n[...sebagian konteks dipotong demi batas buffer sistem...]\n\n${tail}`;
+        }
+
         const args = [
-            "-p", prompt,
+            "-p", safePrompt,
             "--effort", "low",
             "--disable-slash-commands",
             "--dangerously-skip-permissions",

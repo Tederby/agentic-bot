@@ -15,7 +15,7 @@ import { buildContext } from "./lib/contextBuilder.js";
 import { runAutoDetects } from "./lib/autoDetect.js";
 import { logger } from "./lib/logger.js";
 import { checkPermissions } from "./lib/middleware.js";
-import { isBanned, isGroupBanned, isUserGroupBanned, getActiveBotsInGroup, claimMessage, getGroupConfig, isRegistered, registerUser, isAiGlobalEnabled, getAiChatSettings, isUserAiIgnored } from "./lib/database.js";
+import { isBanned, isGroupBanned, isUserGroupBanned, getActiveBotsInGroup, claimMessage, getGroupConfig, isRegistered, registerUser, isAiGlobalEnabled, getAiChatSettings, isUserAiIgnored, resolveUserId } from "./lib/database.js";
 import { logMessage } from "./lib/messageLogger.js";
 import { enqueueAiTrigger, handleManualInterrupt } from "./lib/aiQueue.js";
 import setting from "./setting.js";
@@ -84,11 +84,26 @@ let msgHandler = async (upsert, sock, message) => {
             const botId = process.env.BOT_ID || setting.botId || "bot";
             const participants = ctx.groupMetadata?.participants;
             
-            if (participants && participants.length > 0 && !(cmd && cmd.multiBot)) {
+            const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
+            const myCanonicalJid = resolveUserId(myJid);
+            const myNumber = myCanonicalJid.split("@")[0];
+
+            const quotedSender = message.quoted?.sender ? resolveUserId(message.quoted.sender) : null;
+            const isQuotedMe = message.quoted?.key?.fromMe || (quotedSender && quotedSender === myCanonicalJid);
+
+            const isMentioned = message.mentionMe || 
+                (Array.isArray(message.mentionedJid) && message.mentionedJid.some(j => {
+                    const norm = resolveUserId(j);
+                    return norm.includes(myNumber);
+                }));
+
+            const isDirectlyTargetingMe = isMentioned || isQuotedMe;
+
+            // Direct mentions/quotes targeted to THIS bot bypass general multi-bot claim
+            if (participants && participants.length > 0 && !(cmd && cmd.multiBot) && !isDirectlyTargetingMe) {
                 const participantJids = participants.map(p => p.id);
                 const activeBots = getActiveBotsInGroup(participantJids);
                 
-                const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
                 const myIndex = activeBots.indexOf(myJid);
                 
                 if (myIndex > 0) {
@@ -144,10 +159,19 @@ let msgHandler = async (upsert, sock, message) => {
                             isTriggered = true;
                         } else if (chatSettings.mode === "trigger") {
                             // Group: Tagged/mentioned or replying to userbot's message
-                            const myNormalizedId = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
+                            const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
+                            const myCanonicalJid = resolveUserId(myJid);
+                            const myNumber = myCanonicalJid.split("@")[0];
+
+                            const quotedSender = message.quoted?.sender ? resolveUserId(message.quoted.sender) : null;
+                            const isQuotedMe = message.quoted?.key?.fromMe || (quotedSender && quotedSender === myCanonicalJid);
+
                             const isMentioned = message.mentionMe || 
-                                (Array.isArray(message.mentionedJid) && message.mentionedJid.some(j => j.includes(myNormalizedId.split("@")[0])));
-                            const isQuotedMe = message.quoted?.key?.fromMe;
+                                (Array.isArray(message.mentionedJid) && message.mentionedJid.some(j => {
+                                    const norm = resolveUserId(j);
+                                    return norm.includes(myNumber);
+                                }));
+
                             if (isMentioned || isQuotedMe) {
                                 isTriggered = true;
                             }
