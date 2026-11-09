@@ -1,15 +1,19 @@
-# WA-Bot-Engine
+# Agentic-Bot
 
-A minimal, high-performance, multi-instance WhatsApp bot engine built with [Baileys](https://github.com/WhiskeySockets/Baileys), Node.js (ES Modules), and SQLite (WAL mode). 
+An autonomous, agentic WhatsApp userbot and multi-instance bot engine built with [Baileys](https://github.com/WhiskeySockets/Baileys), Node.js (ES Modules), SQLite (WAL mode), and Google Antigravity (`agy`) CLI.
 
-Designed as a **production-ready barebone framework**. Run multiple bot phone numbers concurrently from a single codebase, hot-reload commands with zero downtime, render native interactive HTML webviews, and build custom features without architectural bloat.
+Run multiple bot accounts concurrently from a single codebase, utilize persistent sliding-window context and thread reconstruction, simulate human conversation via an agentic userbot, render native interactive in-app HTML webviews, and execute commands with zero downtime.
 
 ---
 
 ## Highlights
 
+- **Autonomous Agentic Userbot**: Acts directly on behalf of the account owner via the Google Antigravity (`agy`) CLI, supporting non-interactive reasoning and agentic workflows.
+- **Sliding-Window Context Reconstruction**: Maintains a 15-message chronological context with local thread numbering (`#1`, `#2 [Reply #1]`), out-of-window quoted message recovery via SQLite, and zero-download media tagging.
+- **Debounce & Mutex Concurrency Queue**: Aggregates rapid successive chat bubbles into single prompts via a 3.5s debounce buffer, serializes inferencing per chat via a FIFO mutex queue, and simulates WhatsApp typing indicators (`composing` / `paused`).
+- **Instant Manual Override (Loop Breaker)**: Automatically cancels pending debounce buffers and aborts active AI execution if the account owner sends a manual chat message.
 - **Multi-Instance Concurrency (PM2)**: Run dozens of bot numbers simultaneously with process isolation, independent session stores, and atomic SQLite message claim deduplication.
-- **SQLite with WAL Mode**: Embedded zero-config database using `better-sqlite3` with Write-Ahead Logging for high-throughput concurrent reads and writes.
+- **SQLite with WAL Mode**: Embedded zero-config database using `better-sqlite3` with Write-Ahead Logging for high-throughput concurrent reads and writes, paired with automatic 48-hour message pruning.
 - **Interactive HTML UI Engine (Webview)**: Send native in-app HTML5/CSS3 graphical interfaces (cards, dashboards, pseudo-buttons, client-side tabs) via WhatsApp's `richResponseMessage` protocol.
 - **Zero-Downtime Hot-Reload**: Live-edit command files and the core message pipeline without disconnecting the WhatsApp socket.
 - **Deterministic Identity Resolution**: Fully resolves WhatsApp's Linked Device ID (LID) privacy mode and multi-device suffixes into canonical phone number JIDs.
@@ -25,9 +29,10 @@ Comprehensive technical guides are available in the [`docs/`](docs/README.md) di
 
 | Guide | Description |
 | :--- | :--- |
-| [**Architecture & Pipeline**](docs/ARCHITECTURE.md) | 12-stage message pipeline, PM2 multi-instance model, hot-reload internals, and LID/PN identity resolution. |
+| [**Agentic AI & Infrastructure**](docs/AGENTIC_INFRASTRUCTURE.md) | End-to-end review of the AI Userbot subsystem, message ingestion, context reconstruction, debounce mutex queue, and Linux VPS deployment. |
+| [**Architecture & Pipeline**](docs/ARCHITECTURE.md) | 13-stage message pipeline, PM2 multi-instance model, hot-reload internals, and LID/PN identity resolution. |
 | [**Command & UI Development**](docs/COMMAND_DEVELOPMENT.md) | Command anatomy, declarative permission flags, Interactive HTML UI Engine (`uiEngine`), reply handlers, and auto-detection. |
-| [**Database & Storage**](docs/DATABASE.md) | Complete SQLite schema, WAL configuration, canonical JID rules (`toCanonicalUserId`), and ban subsystems. |
+| [**Database & Storage**](docs/DATABASE.md) | Complete SQLite schema (including `chat_messages` and `ai_*` tables), WAL configuration, canonical JID rules, and maintenance routines. |
 | [**Configuration & Deployment**](docs/CONFIGURATION_DEPLOYMENT.md) | Environment variables, PM2 setup (`ecosystem.config.cjs`), QR vs. Pairing Code, and automated VACUUM cleanup. |
 | [**Changelog**](docs/CHANGELOG.md) | Structured SemVer release notes documenting features, fixes, and engine upgrades. |
 
@@ -37,21 +42,22 @@ Comprehensive technical guides are available in the [`docs/`](docs/README.md) di
 
 ### 1. Requirements
 - **Node.js** v18+ (v20 LTS recommended)
+- **Google Antigravity (`agy`) CLI** (installed and available in system PATH or configured via `AGY_BIN_PATH`)
 - **C++ Build Tools** (for `better-sqlite3` native compilation):
   - *Linux*: `sudo apt install -y build-essential python3`
   - *Windows*: Visual Studio Build Tools (Desktop C++)
 
 ### 2. Installation
 ```bash
-git clone https://github.com/Tederby/WA-Bot-Engine.git
-cd WA-Bot-Engine
+git clone https://github.com/Tederby/agentic-bot.git
+cd agentic-bot
 npm install
 ```
 
 ### 3. Configuration
 ```bash
 cp .env.example .env
-# Configure your OWNER_NUMBER, PREFIXES, and bot settings
+# Configure your OWNER_NUMBER, PREFIXES, AGY_BIN_PATH, and bot settings
 ```
 
 ### 4. Running the Bot
@@ -81,57 +87,18 @@ Start the bot, copy the 8-character pairing code from the logs, and enter it und
 
 ---
 
-## Creating a Command
+## Agentic AI Userbot Usage
 
-Create a `.js` file in `commands/`. The bot discovers and hot-reloads it instantly:
+Control the AI userbot companion using the master command:
 
-```javascript
-// commands/hello.js
-export default {
-    name: "hello",
-    aliases: ["hi"],
-    category: "general",
-    description: "Greets the user",
-    usage: "!hello",
-
-    async handler({ message, pushname }) {
-        await message.reply(`Hello, ${pushname}! 👋`);
-    }
-};
-```
-
-### Rendering Native HTML Webviews
-
-WA-Bot-Engine can render sandboxed HTML interfaces directly inside WhatsApp:
-
-```javascript
-// commands/card.js
-import { sendUI, renderPage, renderCard } from "../lib/uiEngine.js";
-
-export default {
-    name: "card",
-    async handler({ message, sock, pushname, sender }) {
-        const html = renderPage({
-            title: "Member Card",
-            body: renderCard({
-                icon: "👤",
-                title: pushname || "User",
-                subtitle: sender,
-                content: "<p>Welcome to <b>WA-Bot-Engine</b>!</p>"
-            })
-        });
-
-        const sent = await sendUI(sock, message.chat, {
-            title: "Member Card",
-            html
-        });
-
-        // Auto-delete after 2 minutes to keep chat clean
-        setTimeout(() => {
-            sock.sendMessage(message.chat, { delete: sent.key }).catch(() => {});
-        }, 120_000);
-    }
-};
+```text
+!ai status                    # View global switch, chat switch, mode, and ignore list
+!ai on / !ai off              # Master switch enabling/disabling AI globally
+!ai chat on / !ai chat off    # Enable/disable AI in current DM or group
+!ai mode <trigger|command>    # Set sensitivity (trigger responds to mentions/replies/DMs)
+!ai ignore add @user          # Ignore specific members in a group
+!ai ignore del @user          # Unignore a member in a group
+!ai ignore list               # View current group ignore list
 ```
 
 ---
@@ -139,13 +106,15 @@ export default {
 ## Project Structure
 
 ```
-wa-bot-engine/
+agentic-bot/
 ├── commands/                   # Auto-loaded command modules
 │   ├── _registry.js            # Dynamic loader & reply handler registry
+│   ├── ai.js                   # Master AI Userbot control command
 │   ├── ping.js                 # Minimal latency check command
 │   └── html.js                 # Interactive HTML webview renderer command
 ├── docs/                       # Technical documentation suite
 │   ├── README.md               # Documentation index
+│   ├── AGENTIC_INFRASTRUCTURE.md # AI Userbot architecture & VPS deployment guide
 │   ├── ARCHITECTURE.md         # Pipeline & concurrency architecture
 │   ├── COMMAND_DEVELOPMENT.md  # Command & UI development guide
 │   ├── DATABASE.md             # SQLite schema & canonical JID reference
@@ -153,7 +122,10 @@ wa-bot-engine/
 │   └── CHANGELOG.md            # Structured SemVer changelog
 ├── lib/                        # Core engine modules
 │   ├── db.js                   # SQLite connection & WAL pragmas
-│   ├── database.js             # User/group CRUD, canonical ID & claims
+│   ├── database.js             # User/group CRUD, canonical ID, chat history & AI settings
+│   ├── messageLogger.js        # Chat history ingestion to chat_messages
+│   ├── aiContextBuilder.js      # Sliding-window context & thread tagging builder
+│   ├── aiQueue.js              # Debounce buffer, FIFO mutex queue, manual interrupt
 │   ├── uiEngine.js             # Native HTML webview renderer & templates
 │   ├── Messages.js             # Baileys message wrapper & serializer
 │   ├── commandParser.js        # Prefix & argument parsing
@@ -166,9 +138,10 @@ wa-bot-engine/
 ├── patches/
 │   └── baileys+7.0.0-rc13.patch # tcToken protocol fix via patch-package
 ├── services/
-│   └── cleanup.js              # Background temp file & SQLite VACUUM cleanup
+│   ├── aiEngine.js             # Antigravity (agy) CLI execution bridge
+│   └── cleanup.js              # Background temp file, 48h chat purge & VACUUM
 ├── index.js                    # Entry point, socket & connection lifecycle
-├── handler.js                  # 12-stage message processing pipeline
+├── handler.js                  # 13-stage message processing pipeline
 ├── setting.js                  # Consolidated configuration
 └── ecosystem.config.cjs        # PM2 multi-instance cluster definition
 ```

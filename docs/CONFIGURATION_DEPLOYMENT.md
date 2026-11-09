@@ -25,6 +25,8 @@ Configuration is managed via environment variables (loaded through `.env` or inj
 | `REPLY_HANDLER_EXPIRY` | `900000` (15m)| Time before registered interactive reply handlers expire. |
 | `CLAIMS_PURGE_AGE` | `300000` (5m) | Age threshold for deleting old entries in `message_claims`. |
 | `VACUUM_INTERVAL` | `1800000` (30m)| Interval for running SQLite disk space `VACUUM`. |
+| `AGY_BIN_PATH` | `""` | Custom absolute path to the `agy` binary (defaults to system PATH on Linux). |
+| `AI_DEBOUNCE_MS` | `3500` | Delay window (in ms) to accumulate rapid successive messages before invoking AI. |
 
 ---
 

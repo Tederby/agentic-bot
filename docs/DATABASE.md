@@ -115,6 +115,62 @@ Passive mapping table between WhatsApp Privacy LIDs (`@lid`) and Phone Number JI
 
 ---
 
+### `chat_messages`
+Stores incoming and outgoing chat history used for sliding-window context retrieval (15 messages) and thread reconstruction in AI userbot workflows.
+
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `id` | `TEXT` | `PRIMARY KEY` | WhatsApp stanza ID (`message.key.id`). |
+| `chat_jid` | `TEXT` | `NOT NULL` | Conversation JID (group or DM). |
+| `sender_jid`| `TEXT` | `NOT NULL` | Canonical Phone Number JID of the sender. |
+| `sender_name`| `TEXT` | `NULLABLE` | Display pushname or 'You'. |
+| `text` | `TEXT` | `NULLABLE` | Message body text or caption. |
+| `media_type`| `TEXT` | `NULLABLE` | Media type (`image`, `video`, `sticker`, etc.). |
+| `media_caption`| `TEXT`| `NULLABLE`| Caption or description text for media messages. |
+| `quoted_id` | `TEXT` | `NULLABLE` | Stanza ID of the quoted/replied message. |
+| `is_from_me`| `INTEGER`| `DEFAULT 0`| 1 if sent by the account owner, 0 otherwise. |
+| `timestamp` | `INTEGER`| `NOT NULL` | Unix timestamp in seconds. |
+
+*Indexes:* `idx_chat_messages_lookup ON chat_messages(chat_jid, timestamp DESC)`, `idx_chat_messages_quoted ON chat_messages(quoted_id)`
+
+---
+
+### `ai_global_config`
+Key-value store for global AI persona switches and defaults.
+
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `key` | `TEXT` | `PRIMARY KEY` | Config key name (e.g. `enabled`, `default_persona`). |
+| `value` | `TEXT` | `NULLABLE` | String value (`1`, `0`, or persona text). |
+
+---
+
+### `ai_chat_settings`
+Per-chat configuration controlling AI userbot behavior in individual DMs and groups.
+
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `chat_jid` | `TEXT` | `PRIMARY KEY` | JID of the chat or group. |
+| `enabled` | `INTEGER` | `DEFAULT 0` | 1 if AI is enabled in this chat, 0 if disabled. |
+| `mode` | `TEXT` | `DEFAULT 'trigger'` | Sensitivity mode: `trigger` (tag/reply/DM) or `command`. |
+| `custom_persona`| `TEXT`| `NULLABLE` | Optional prompt persona override for this specific chat. |
+| `updated_at` | `INTEGER` | `NULLABLE` | Unix timestamp in seconds of last setting change. |
+
+---
+
+### `ai_group_ignores`
+Tracks members ignored by the AI userbot within specific groups.
+
+| Column | Type | Constraints | Description |
+| :--- | :--- | :--- | :--- |
+| `chat_jid` | `TEXT` | `NOT NULL` | Group JID (`<id>@g.us`). |
+| `user_jid` | `TEXT` | `NOT NULL` | Canonical Phone Number JID of the ignored user. |
+| `created_at` | `INTEGER` | `NULLABLE` | Unix timestamp in seconds when ignore was added. |
+
+*Primary Key:* `PRIMARY KEY (chat_jid, user_jid)`
+
+---
+
 ## 3. The Canonical JID Rule
 
 > **Never use raw JIDs as primary keys or query arguments for user data.**
@@ -144,6 +200,7 @@ Every database function inside `lib/database.js` automatically applies this tran
 SQLite databases in WAL mode accumulate database pages and wal logs over time. WA-Bot-Engine automatically maintains the database through [`services/cleanup.js`](../services/cleanup.js):
 
 - **Stale Claims Purging**: Claims older than 5 minutes (`setting.claimsPurgeAge`) are purged periodically.
+- **Chat History Auto-Pruning**: Messages in `chat_messages` older than 48 hours are automatically purged to prevent disk bloat.
 - **Periodic VACUUM**: Executes `VACUUM` every 30 minutes (`setting.vacuumInterval`) to defragment the SQLite database file and reclaim unused disk space.
 
 ---

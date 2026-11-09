@@ -4,6 +4,23 @@ All notable changes to **WA-Bot-Engine** are documented in this file. This proje
 
 ---
 
+## [1.3.0] — 2026-11-09
+
+### Added
+- **Agentic AI Userbot Subsystem**: Integrated Google Antigravity (`agy`) CLI bridge (`services/aiEngine.js`) to power autonomous userbot responses on Linux VPS and Windows environments.
+- **Persistent Message Ingestion Pipeline (`lib/messageLogger.js`)**: Passively records incoming and outgoing (`fromMe: true`) messages into the `chat_messages` SQLite table with compound index lookups.
+- **Sliding-Window Context Reconstruction (`lib/aiContextBuilder.js`)**: Implemented 15-message chronological sliding window with local thread tagging (`#1`, `#2 [Reply #1]`), zero-download media representations, and out-of-window quoted message recovery via SQLite lookups.
+- **Per-Chat Debounce & FIFO Mutex Queue (`lib/aiQueue.js`)**: Added a 3.5-second debounce buffer to aggregate rapid successive chat bubbles, a per-chat concurrency mutex queue, native WhatsApp typing simulation (`composing`/`paused`), and instantaneous manual interrupts via `AbortController` when the account owner types manually.
+- **Master Userbot Command (`commands/ai.js`)**: Owner-only command interface supporting `!ai status`, `!ai on/off`, `!ai chat on/off`, `!ai mode <trigger|command>`, and `!ai ignore <add|del|list> @user`.
+- **Database Schemas for AI**: Added `chat_messages`, `ai_global_config`, `ai_chat_settings`, and `ai_group_ignores` in `lib/db.js` with helper methods in `lib/database.js`.
+- **Automated Message Retention Pruning**: Integrated automatic 48-hour message purging in `services/cleanup.js`.
+- **Comprehensive Infrastructure Review (`docs/AGENTIC_INFRASTRUCTURE.md`)**: Full technical documentation detailing the architecture, data flow, queue mechanics, and Linux VPS deployment.
+
+### Fixed
+- **Mention Array Verification (`lib/Messages.js`)**: Fixed bug where `m.mentionMe` only inspected `mentionedJid[0]` without JID normalization; now properly evaluates the entire array using `jidNormalizedUser()`.
+
+---
+
 ## [1.2.0] — 2026-11-09
 
 ### Added

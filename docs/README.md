@@ -20,6 +20,9 @@ The documentation is organized into focused, topic-specific guides:
 - [Configuration and Deployment Guide](CONFIGURATION_DEPLOYMENT.md)  
   Environment variables reference, PM2 multi-bot clustering setup (`ecosystem.config.cjs`), QR code vs headless pairing code login, and automated cleanup maintenance.
 
+- [Agentic AI Userbot & Infrastructure Review](AGENTIC_INFRASTRUCTURE.md)  
+  Comprehensive review of the autonomous AI Userbot subsystem, message ingestion pipeline, thread tagging, debounce mutex queues, Antigravity (`agy`) CLI bridge, and Linux VPS deployment.
+
 - [Release Changelog](CHANGELOG.md)  
   Structured SemVer release notes documenting features, bug fixes, breaking changes, and architectural upgrades.
 

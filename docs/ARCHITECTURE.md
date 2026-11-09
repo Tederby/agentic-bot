@@ -162,3 +162,15 @@ WA-Bot-Engine includes a native in-app HTML rendering engine utilizing WhatsApp'
 - **Auto-Deletion Lifecycle**: Commands dispatching webview cards schedule auto-deletion (120 seconds) via message key tracking to prevent viewport performance degradation.
 
 > For complete protocol specifications, standalone Baileys implementation, the empirical Chromium capability matrix, stanza size boundaries, and copy chip mechanics, see [**`docs/WEBVIEW_PAYLOAD.md`**](WEBVIEW_PAYLOAD.md).
+
+---
+
+## 7. AI Userbot & Agentic Subsystem
+
+WA-Bot-Engine integrates an agentic userbot architecture powered by the **Antigravity (`agy`) CLI**:
+
+- **Message Ingestion (`lib/messageLogger.js`)**: Passively records incoming and outgoing messages into `chat_messages` to maintain persistent sliding-window context.
+- **Context Builder (`lib/aiContextBuilder.js`)**: Compiles 15 recent messages with thread tagging (`#1`, `#2 [Reply #1]`), zero-download media representations, and out-of-window quoted message recovery.
+- **Debounce & Concurrency Mutex (`lib/aiQueue.js`)**: Buffers rapid successive chat messages (3.5s window), serializes executions per chat via a FIFO mutex queue, and updates WhatsApp typing presence (`composing` / `paused`).
+- **Manual Override**: Automatically aborts active agent execution and clears debounce buffers whenever the account owner (`fromMe`) sends a manual message.
+- **Execution Bridge (`services/aiEngine.js`)**: Executes `agy -p "<prompt>"` in a sandboxed directory with `--effort low` and `--dangerously-skip-permissions`. Operates cross-platform (using `agy` in Linux PATH or custom `AGY_BIN_PATH`).

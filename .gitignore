@@ -11,3 +11,4 @@ database.db-shm
 cycle_count.json
 temp.txt
 .agents/*
+/notes

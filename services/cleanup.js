@@ -12,7 +12,7 @@ import fs from "fs";
 import path from "path";
 import setting from "../setting.js";
 import { cleanupExpiredReplyHandlers } from "../commands/_registry.js";
-import { purgeOldClaims } from "../lib/database.js";
+import { purgeOldClaims, purgeOldChatMessages } from "../lib/database.js";
 import db from "../lib/db.js";
 import { logger } from "../lib/logger.js";
 
@@ -40,10 +40,11 @@ export function initCleanup() {
     setInterval(() => {
         let filesPurged = cleanupTempFiles(tempDir, setting.fileExpiry);
         let statesPurged = cleanupExpiredReplyHandlers(setting.replyHandlerExpiry);
+        let messagesPurged = purgeOldChatMessages(48 * 3600);
         purgeOldClaims(setting.claimsPurgeAge);
 
-        if (filesPurged + statesPurged > 0) {
-            logger.info("CLEANUP", `files: ${filesPurged}, states: ${statesPurged}`);
+        if (filesPurged + statesPurged + messagesPurged > 0) {
+            logger.info("CLEANUP", `files: ${filesPurged}, states: ${statesPurged}, messages: ${messagesPurged}`);
         }
     }, setting.cleanupInterval);
 

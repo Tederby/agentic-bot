@@ -15,7 +15,9 @@ import { buildContext } from "./lib/contextBuilder.js";
 import { runAutoDetects } from "./lib/autoDetect.js";
 import { logger } from "./lib/logger.js";
 import { checkPermissions } from "./lib/middleware.js";
-import { isBanned, isGroupBanned, isUserGroupBanned, getActiveBotsInGroup, claimMessage, getGroupConfig, isRegistered, registerUser } from "./lib/database.js";
+import { isBanned, isGroupBanned, isUserGroupBanned, getActiveBotsInGroup, claimMessage, getGroupConfig, isRegistered, registerUser, isAiGlobalEnabled, getAiChatSettings, isUserAiIgnored } from "./lib/database.js";
+import { logMessage } from "./lib/messageLogger.js";
+import { enqueueAiTrigger, handleManualInterrupt } from "./lib/aiQueue.js";
 import setting from "./setting.js";
 
 // ── Blocklist Cache (avoid network call per-message) ────────────────────────
@@ -53,6 +55,14 @@ let msgHandler = async (upsert, sock, message) => {
         // ── Build context ───────────────────────────────────────────
         const ctx = await buildContext(message, sock);
         if (!ctx.sender) return;
+
+        // ── Message Ingestion (Sliding Window History) ──────────────
+        logMessage(message);
+
+        // ── Manual Override (User types manually → cancel AI queue) ──
+        if (message.key.fromMe) {
+            handleManualInterrupt(message.chat);
+        }
 
         // ── [OPTIONAL] Ban checks (silent drop — no response) ───────
         // Built-in ban system. Remove these lines if you don't
@@ -120,6 +130,35 @@ let msgHandler = async (upsert, sock, message) => {
                 logger.autoDetect(t, detection.name, ctx.pushname, ctx.isGroup, ctx.groupName);
                 await sock.readMessages([message.key]);
                 return;
+            }
+
+            // ── AI Userbot Trigger Evaluation ───────────────────────
+            if (isAiGlobalEnabled() && !message.key.fromMe) {
+                const chatSettings = getAiChatSettings(message.chat);
+                if (chatSettings?.enabled) {
+                    const isIgnored = ctx.isGroup && isUserAiIgnored(message.chat, ctx.sender);
+                    if (!isIgnored) {
+                        let isTriggered = false;
+                        if (!ctx.isGroup) {
+                            // DM: All incoming messages from partner trigger AI
+                            isTriggered = true;
+                        } else if (chatSettings.mode === "trigger") {
+                            // Group: Tagged/mentioned or replying to userbot's message
+                            const myNormalizedId = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
+                            const isMentioned = message.mentionMe || 
+                                (Array.isArray(message.mentionedJid) && message.mentionedJid.some(j => j.includes(myNormalizedId.split("@")[0])));
+                            const isQuotedMe = message.quoted?.key?.fromMe;
+                            if (isMentioned || isQuotedMe) {
+                                isTriggered = true;
+                            }
+                        }
+
+                        if (isTriggered) {
+                            enqueueAiTrigger({ message, sock, ctx });
+                            return;
+                        }
+                    }
+                }
             }
         }
 
