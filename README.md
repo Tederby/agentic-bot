@@ -38,14 +38,28 @@ Comprehensive technical guides are available in the [`docs/`](docs/README.md) di
 
 ---
 
+## Operating System Notice
+
+> [!IMPORTANT]
+> **TARGET ENVIRONMENT: LINUX (STRONGLY RECOMMENDED)**  
+> `agentic-bot` is engineered specifically to run in **Linux environments (Ubuntu, Debian, CentOS, or Alpine VPS / Dedicated Servers)**. Running in production on Linux is **strongly recommended** for:
+> - **Native Process Management**: Seamless daemonization, automatic reboot resurrection, and cluster management via PM2.
+> - **Antigravity CLI (`agy`) Execution**: Linux provides native POSIX child-process execution without Windows shell pathing, quoting, or permission quirks.
+> - **High-Performance SQLite WAL Concurrency**: POSIX file locks and non-blocking I/O allow zero-lock contention across concurrent worker instances.
+> - **Connection Reliability**: Server-grade network stacks and NAT keep-alive prevent WhatsApp WebSocket drops.
+>
+> *(Windows can be used strictly for local development and offline testing, but is NOT recommended for production deployment).*
+
+---
+
 ## Quick Start
 
-### 1. Requirements
-- **Node.js** v18+ (v20 LTS recommended)
-- **Google Antigravity (`agy`) CLI** (installed and available in system PATH or configured via `AGY_BIN_PATH`)
-- **C++ Build Tools** (for `better-sqlite3` native compilation):
-  - *Linux*: `sudo apt install -y build-essential python3`
-  - *Windows*: Visual Studio Build Tools (Desktop C++)
+### 1. Requirements (Linux VPS)
+- **Linux OS**: Ubuntu 20.04/22.04/24.04 LTS or Debian 11/12 recommended
+- **Node.js**: v18+ (v20 LTS recommended)
+- **Google Antigravity (`agy`) CLI**: Installed in system PATH or configured via `AGY_BIN_PATH`
+- **Native Build Tools**: `sudo apt update && sudo apt install -y build-essential python3`
+- **PM2**: `sudo npm install -g pm2`
 
 ### 2. Installation
 ```bash

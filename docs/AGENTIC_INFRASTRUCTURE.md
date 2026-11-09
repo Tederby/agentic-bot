@@ -4,11 +4,19 @@ This document provides a comprehensive technical review of the architecture, sub
 
 ---
 
-## 1. System Overview & Core Philosophy
+## 1. System Overview & Target Environment
+
+> [!IMPORTANT]
+> **PRODUCTION TARGET: LINUX OS (STRONGLY RECOMMENDED)**  
+> `agentic-bot` is architected from the ground up for **Linux (Ubuntu / Debian VPS & Dedicated Servers)**. While Windows is supported as a local development convenience, running 24/7 autonomous production instances on Linux is strongly recommended due to:
+> 1. **POSIX Process Execution**: Seamless non-interactive child process spawning of the `agy` CLI without shell quoting or Windows cmd/PowerShell encoding artifacts.
+> 2. **Persistent Daemonization**: Zero-overhead 24/7 execution via PM2 with automatic resurrection on server reboot.
+> 3. **High-Throughput Concurrent SQLite WAL**: Linux kernel file descriptor handling and shared memory (`.db-shm`) deliver optimal concurrent reads and writes.
+> 4. **Network Stack Stability**: Robust long-lived TCP/WebSocket connections preventing NAT drops.
 
 `agentic-bot` is engineered as a hybrid platform:
 1. **Multi-Instance WhatsApp Bot Engine**: A modular, multi-process runtime built on [Baileys](https://github.com/WhiskeySockets/Baileys) and SQLite WAL mode.
-2. **Autonomous Agentic Userbot**: An AI companion acting directly on behalf of the account owner, parsing natural conversation context, preventing spam/loops, and executing agentic workflows via the Antigravity (`agy`) CLI on Linux VPS or Windows.
+2. **Autonomous Agentic Userbot**: An AI companion acting directly on behalf of the account owner, parsing natural conversation context, preventing spam/loops, and executing agentic workflows via the Antigravity (`agy`) CLI on Linux VPS.
 
 ```mermaid
 flowchart TD

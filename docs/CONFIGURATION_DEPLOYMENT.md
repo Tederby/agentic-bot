@@ -123,17 +123,32 @@ pm2 startup
 
 ---
 
-## 4. System Prerequisites
+## 4. System Prerequisites & OS Recommendations
 
-- **Node.js**: v18.0.0 or higher (`Node.js v20 LTS` recommended).
-- **Native Build Tools** (required by `better-sqlite3`):
-  - **Linux / Ubuntu / Debian**:
-    ```bash
-    sudo apt update && sudo apt install -y build-essential python3
-    ```
-  - **Windows**:
-    Run in PowerShell as Administrator:
-    ```powershell
-    npm install -g windows-build-tools
-    ```
-    *(Or install "Desktop development with C++" via Visual Studio Installer)*
+> [!IMPORTANT]
+> **OPERATING SYSTEM: LINUX (STRONGLY RECOMMENDED)**  
+> This engine is optimized for **Linux (Ubuntu, Debian, CentOS, or Alpine VPS / Cloud Servers)**. Deploying in production on a Linux VPS is strongly recommended for stability, resource efficiency, and flawless background daemonization with PM2 and `agy`.
+> Windows is suitable only for brief offline debugging and should not be used as a 24/7 production host.
+
+### Linux (Ubuntu / Debian VPS — Production Target)
+```bash
+# 1. Update packages and install C++ build tools for better-sqlite3
+sudo apt update && sudo apt install -y build-essential python3 curl git
+
+# 2. Install Node.js v20 LTS
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# 3. Install PM2 globally
+sudo npm install -g pm2
+
+# 4. Verify agy binary is available in PATH
+which agy && agy --version
+```
+
+### Windows (Local Development Only)
+Run in PowerShell as Administrator:
+```powershell
+npm install -g windows-build-tools
+# Or install Visual Studio Desktop C++ Build Tools
+```
