@@ -12,3 +12,6 @@ cycle_count.json
 temp.txt
 .agents/*
 /notes
+*.backup
+persona.txt
+ecosystem.config.cjs

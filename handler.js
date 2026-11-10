@@ -17,7 +17,7 @@ import { logger } from "./lib/logger.js";
 import { checkPermissions } from "./lib/middleware.js";
 import { isBanned, isGroupBanned, isUserGroupBanned, getActiveBotsInGroup, claimMessage, getGroupConfig, isRegistered, registerUser, isAiGlobalEnabled, getAiChatSettings, isUserAiIgnored, resolveUserId } from "./lib/database.js";
 import { logMessage } from "./lib/messageLogger.js";
-import { enqueueAiTrigger, handleManualInterrupt } from "./lib/aiQueue.js";
+import { enqueueAiTrigger, handleManualInterrupt, isDebounceActive } from "./lib/aiQueue.js";
 import setting from "./setting.js";
 
 // ── Blocklist Cache (avoid network call per-message) ────────────────────────
@@ -87,14 +87,16 @@ let msgHandler = async (upsert, sock, message) => {
             const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
             const myCanonicalJid = resolveUserId(myJid);
             const myNumber = myCanonicalJid.split("@")[0];
+            const myLid = sock.user?.lid ? (sock.user.lid.includes(":") ? sock.user.lid.split(":")[0] + "@lid" : sock.user.lid) : null;
+            const myLidNumber = myLid ? myLid.split("@")[0] : null;
 
             const quotedSender = message.quoted?.sender ? resolveUserId(message.quoted.sender) : null;
-            const isQuotedMe = message.quoted?.key?.fromMe || (quotedSender && quotedSender === myCanonicalJid);
+            const isQuotedMe = message.quoted?.key?.fromMe || (quotedSender && (quotedSender === myCanonicalJid || (myLid && quotedSender === myLid)));
 
             const isMentioned = message.mentionMe || 
                 (Array.isArray(message.mentionedJid) && message.mentionedJid.some(j => {
                     const norm = resolveUserId(j);
-                    return norm.includes(myNumber);
+                    return norm.includes(myNumber) || (myLidNumber && norm.includes(myLidNumber));
                 }));
 
             const isDirectlyTargetingMe = isMentioned || isQuotedMe;
@@ -150,38 +152,71 @@ let msgHandler = async (upsert, sock, message) => {
             // ── AI Userbot Trigger Evaluation ───────────────────────
             if (isAiGlobalEnabled() && !message.key.fromMe) {
                 const chatSettings = getAiChatSettings(message.chat);
-                if (chatSettings?.enabled) {
+                // DMs are enabled by default when global AI is ON, unless explicitly turned off (enabled === false).
+                // Groups require chatSettings.enabled === true.
+                const isChatEnabled = chatSettings ? chatSettings.enabled : (!ctx.isGroup);
+
+                const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
+                const myCanonicalJid = resolveUserId(myJid);
+                const myNumber = myCanonicalJid.split("@")[0];
+                const myLid = sock.user?.lid ? (sock.user.lid.includes(":") ? sock.user.lid.split(":")[0] + "@lid" : sock.user.lid) : null;
+                const myLidNumber = myLid ? myLid.split("@")[0] : null;
+
+                const quotedSender = message.quoted?.sender ? resolveUserId(message.quoted.sender) : null;
+                const isQuotedMe = message.quoted?.key?.fromMe || (quotedSender && (quotedSender === myCanonicalJid || (myLid && quotedSender === myLid)));
+
+                const isMentioned = message.mentionMe || 
+                    (Array.isArray(message.mentionedJid) && message.mentionedJid.some(j => {
+                        const norm = resolveUserId(j);
+                        return norm.includes(myNumber) || (myLidNumber && norm.includes(myLidNumber));
+                    }));
+
+                if (isChatEnabled) {
                     const isIgnored = ctx.isGroup && isUserAiIgnored(message.chat, ctx.sender);
                     if (!isIgnored) {
+                        const isChatDebouncing = isDebounceActive(message.chat);
                         let isTriggered = false;
+
                         if (!ctx.isGroup) {
                             // DM: All incoming messages from partner trigger AI
                             isTriggered = true;
-                        } else if (chatSettings.mode === "trigger") {
+                        } else if (isChatDebouncing) {
+                            // Group: Debounce session is ALREADY ACTIVE in this group!
+                            // Every incoming chat message extends the idle timer and gets bundled!
+                            isTriggered = true;
+                        } else if ((chatSettings?.mode || "trigger") === "all") {
+                            // Group: Mode "all" responds to every chat message
+                            isTriggered = true;
+                        } else if ((chatSettings?.mode || "trigger") === "trigger") {
                             // Group: Tagged/mentioned or replying to userbot's message
-                            const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
-                            const myCanonicalJid = resolveUserId(myJid);
-                            const myNumber = myCanonicalJid.split("@")[0];
-
-                            const quotedSender = message.quoted?.sender ? resolveUserId(message.quoted.sender) : null;
-                            const isQuotedMe = message.quoted?.key?.fromMe || (quotedSender && quotedSender === myCanonicalJid);
-
-                            const isMentioned = message.mentionMe || 
-                                (Array.isArray(message.mentionedJid) && message.mentionedJid.some(j => {
-                                    const norm = resolveUserId(j);
-                                    return norm.includes(myNumber);
-                                }));
-
                             if (isMentioned || isQuotedMe) {
                                 isTriggered = true;
                             }
                         }
 
                         if (isTriggered) {
+                            if (isChatDebouncing) {
+                                logger.info("AI:BUFFER", `Incoming subsequent chat from ${ctx.pushname} in ${ctx.isGroup ? ctx.groupName : "DM"} → Updating debounce timer (+3s idle)`);
+                            } else {
+                                logger.info("AI:TRIGGER", `Incoming message from ${ctx.pushname} in ${ctx.isGroup ? ctx.groupName : "DM"} → Enqueueing AI (debounce 3.5s)`);
+                            }
                             enqueueAiTrigger({ message, sock, ctx });
                             return;
                         }
+                    } else {
+                        logger.info("AI:IGNORE", `User ${ctx.pushname} is in AI ignore list for ${ctx.groupName}`);
                     }
+                } else {
+                    if (!ctx.isGroup) {
+                        logger.warn("AI:SKIPPED", `DM from ${ctx.pushname} skipped: AI is OFF for this chat. (Send '!ai chat on' to enable)`);
+                    } else if (isMentioned || isQuotedMe) {
+                        logger.warn("AI:SKIPPED", `Tag received from ${ctx.pushname} in ${ctx.groupName}, but AI is OFF in this group. (Send '!ai chat on' in this group to enable)`);
+                    }
+                }
+            } else if (!isAiGlobalEnabled() && !message.key.fromMe) {
+                const isTag = message.mentionMe || (Array.isArray(message.mentionedJid) && message.mentionedJid.length > 0);
+                if (!ctx.isGroup || isTag) {
+                    logger.warn("AI:SKIPPED", `Message from ${ctx.pushname} skipped: Master Switch AI is globally OFF. (Send '!ai on' to enable)`);
                 }
             }
         }
@@ -243,6 +278,8 @@ let msgHandler = async (upsert, sock, message) => {
             message,
             sock,
             upsert,
+            chat: message.chat,
+            chatId: message.chat,
             args: effectiveArgs,
             cleanArgs,
             rawArgs,

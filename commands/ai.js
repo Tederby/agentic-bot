@@ -8,7 +8,9 @@
 
 import {
     isAiGlobalEnabled,
+    getAiGlobalConfig,
     setAiGlobalConfig,
+    deleteAiGlobalConfig,
     getAiChatSettings,
     setAiChatSettings,
     isUserAiIgnored,
@@ -17,6 +19,7 @@ import {
     getAiIgnores,
 } from "../lib/database.js";
 import { extractTarget } from "../lib/jidHelper.js";
+import { getFilePersona } from "../lib/aiContextBuilder.js";
 
 export default {
     name: "ai",
@@ -26,7 +29,9 @@ export default {
     usage: "!ai <status|on|off|chat on|chat off|mode|ignore|persona>",
     ownerOnly: true,
 
-    async handler({ message, args, isGroup, chat, prefix, commandName }) {
+    async handler(params) {
+        const { message, args, isGroup, prefix, commandName } = params;
+        const chat = params.chat || params.chatId || message?.chat;
         const sub = (args[0] || "status").toLowerCase();
 
         // ── 1. Status ───────────────────────────────────────────────
@@ -86,8 +91,8 @@ export default {
         // ── 4. Trigger Mode ─────────────────────────────────────────
         if (sub === "mode") {
             const mode = (args[1] || "").toLowerCase();
-            if (mode !== "trigger" && mode !== "command") {
-                return message.reply(`❌ Pilihan mode yang valid: *trigger* (tag/reply/DM) atau *command*`);
+            if (mode !== "trigger" && mode !== "command" && mode !== "all") {
+                return message.reply(`❌ Pilihan mode yang valid:\n⋄ *trigger* : Merespons saat di-tag/reply (pesan lanjutan ter-debounce otomatis)\n⋄ *all* : Merespons setiap chat di grup secara otomatis\n⋄ *command* : Hanya aktif via perintah khusus`);
             }
             setAiChatSettings(chat, { mode });
             return message.reply(`✅ Mode AI untuk chat ini diubah ke: *${mode}*`);
@@ -145,18 +150,43 @@ export default {
         if (sub === "persona") {
             const action = (args[1] || "").toLowerCase();
             const chatSettings = getAiChatSettings(chat);
-            const globalPersona = getAiGlobalConfig("default_persona", "(Default bawaan kode)");
+            const globalPersona = getAiGlobalConfig("default_persona", null);
+            const filePersona = getFilePersona();
 
             if (!action || action === "show" || action === "status") {
                 let text = `🎭 *PENGATURAN PERSONA AI*\n`;
                 text += `────────────────────────\n`;
-                text += `*Global Persona:*\n${globalPersona}\n\n`;
-                text += `*Chat Ini:*\n${chatSettings?.custom_persona || "(Menggunakan Global Persona)"}\n`;
+
+                const activeSource = chatSettings?.custom_persona
+                    ? "Chat Khusus Ini"
+                    : globalPersona
+                    ? "Database Global"
+                    : filePersona
+                    ? "File (persona.txt)"
+                    : "Default Bawaan Kode";
+
+                text += `⋄ Sumber Aktif : *${activeSource}*\n`;
+                text += `⋄ Chat Ini     : ${chatSettings?.custom_persona ? `"${chatSettings.custom_persona.slice(0, 80)}..."` : "(Mengikuti Global / File)"}\n`;
+                text += `⋄ DB Global    : ${globalPersona ? `"${globalPersona.slice(0, 80)}..."` : "(Tidak diatur di DB)"}\n`;
+                text += `⋄ persona.txt  : ${filePersona ? `Aktif (${filePersona.length} karakter)` : "(Tidak ada / Kosong)"}\n`;
                 text += `────────────────────────\n`;
-                text += `⋄ Ubah persona chat: \`${prefix}${commandName} persona set <teks>\`\n`;
-                text += `⋄ Reset persona chat: \`${prefix}${commandName} persona reset\`\n`;
-                text += `⋄ Ubah persona global: \`${prefix}${commandName} persona global <teks>\``;
+                text += `*Opsi Pengaturan Command:*\n`;
+                text += `⋄ Persona chat ini : \`${prefix}${commandName} persona set <teks>\`\n`;
+                text += `⋄ Reset chat ini   : \`${prefix}${commandName} persona reset\`\n`;
+                text += `⋄ Persona global   : \`${prefix}${commandName} persona global <teks>\`\n`;
+                text += `⋄ Reset DB global  : \`${prefix}${commandName} persona global reset\`\n`;
+                text += `⋄ Cek persona.txt  : \`${prefix}${commandName} persona reload\`\n\n`;
+                text += `💡 _Tips: Anda juga bisa mengedit langsung file \`persona.txt\` di root project untuk kustomisasi panjang tanpa batasan teks WhatsApp!_`;
                 return message.reply(text);
+            }
+
+            if (action === "reload" || action === "file") {
+                if (filePersona) {
+                    const lines = filePersona.split("\n").length;
+                    return message.reply(`✅ *File persona.txt terdeteksi aktif!*\nPanjang: ${filePersona.length} karakter (${lines} baris).\n\n*Preview:*\n${filePersona.slice(0, 300)}${filePersona.length > 300 ? "..." : ""}`);
+                } else {
+                    return message.reply(`⚠️ File \`persona.txt\` tidak ditemukan atau masih kosong di root project bot.\nBuat atau isi file tersebut untuk menggunakan persona berbasis file.`);
+                }
             }
 
             if (action === "set") {
@@ -170,19 +200,25 @@ export default {
 
             if (action === "reset") {
                 setAiChatSettings(chat, { custom_persona: null });
-                return message.reply(`✅ *Persona chat ini di-reset* (kembali mengikuti persona global).`);
+                return message.reply(`✅ *Persona chat ini di-reset* (kembali mengikuti persona global/file).`);
             }
 
             if (action === "global") {
+                const opt = (args[2] || "").toLowerCase();
+                if (opt === "reset" || opt === "clear") {
+                    deleteAiGlobalConfig("default_persona");
+                    return message.reply(`✅ *Persona global database di-reset!* Sekarang AI akan mengikuti \`persona.txt\` atau default kode.`);
+                }
+
                 const newGlobal = args.slice(2).join(" ").trim();
                 if (!newGlobal) {
-                    return message.reply(`❌ Masukkan teks persona global baru.`);
+                    return message.reply(`❌ Masukkan teks persona global baru atau gunakan \`${prefix}${commandName} persona global reset\` untuk mereset.`);
                 }
                 setAiGlobalConfig("default_persona", newGlobal);
                 return message.reply(`✅ *Persona global default berhasil diperbarui:*\n"${newGlobal}"`);
             }
 
-            return message.reply(`❌ Aksi persona tidak valid. Gunakan: \`${prefix}${commandName} persona [set|reset|global]\``);
+            return message.reply(`❌ Aksi persona tidak valid. Gunakan: \`${prefix}${commandName} persona [set|reset|global|reload]\``);
         }
 
         // ── Help Fallback ───────────────────────────────────────────

@@ -17,16 +17,16 @@
 module.exports = {
   apps: [
     {
-      name: "bot1",
+      name: "ai1",
       script: "./index.js",
       node_args: "--experimental-vm-modules",
       env: {
-        BOT_ID: "bot1",
-        BOT_NAME: "MyBot",
-        OWNER_NUMBER: "<country_code><number>",
+        BOT_ID: "ai1",
+        BOT_NAME: "Tederby",
+        OWNER_NUMBER: "6287825136146",
         PREFIXES: "!.#/-",
-        SPAM_DELAY: "5000",
-        // PAIRING_NUMBER: "<country_code><number>",
+        SPAM_DELAY: "3000",
+        PAIRING_NUMBER: "6287825136146",
       },
     },
     // ── Add more bots below ─────────────────────────────────────

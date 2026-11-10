@@ -26,7 +26,7 @@ import { Messages } from "./lib/Messages.js";
 import { initCleanup } from "./services/cleanup.js";
 import { reloadCommand, initCommands, commandsDir } from "./commands/_registry.js";
 import { handleGroupParticipantsUpdate } from "./lib/events/group-participants.js";
-import { upsertBotRegistry, getUser, saveUser, banUser } from "./lib/database.js";
+import { upsertBotRegistry, getUser, saveUser, banUser, saveIdentityMapping } from "./lib/database.js";
 import { resolveTarget } from "./lib/jidHelper.js";
 import setting from "./setting.js";
 import { logger as log } from "./lib/logger.js";
@@ -393,9 +393,15 @@ function handleConnectionUpdate(update, sock) {
     
     console.log(`${TAG} | ✅ Connected: ${jidDecode(sock?.user?.id)?.user}`);
     
+    // ── Register own LID ↔ PN identity mapping ───────────────
+    const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
+    if (sock.user?.lid) {
+        const myLid = sock.user.lid.includes(":") ? sock.user.lid.split(":")[0] + "@lid" : sock.user.lid;
+        saveIdentityMapping(myLid, myJid);
+    }
+
     // ── Auto-Discovery Heartbeat ─────────────────────────────
     if (registryInterval) clearInterval(registryInterval);
-    const myJid = sock.user.id.includes(":") ? sock.user.id.split(":")[0] + "@s.whatsapp.net" : sock.user.id;
     upsertBotRegistry(BOT_ID, myJid);
     registryInterval = setInterval(() => {
         upsertBotRegistry(BOT_ID, myJid);

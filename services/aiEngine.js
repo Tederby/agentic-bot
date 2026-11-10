@@ -31,6 +31,49 @@ export function getAgyBinPath() {
 }
 
 /**
+ * Ensures an isolated profile directory for agy so it doesn't pollute the user's main environment.
+ * @returns {string} Path to the isolated profile directory.
+ */
+export function getIsolatedBotProfileDir() {
+    const isWindows = process.platform === "win32";
+    const primaryHome = isWindows
+        ? (process.env.USERPROFILE || "C:\\Users\\user")
+        : (process.env.HOME || "/root");
+
+    const botHome = path.join(primaryHome, ".gemini-bot-profile");
+    const targetCliDir = path.join(botHome, ".gemini", "antigravity-cli");
+    const sourceCliDir = path.join(primaryHome, ".gemini", "antigravity-cli");
+
+    if (!fs.existsSync(targetCliDir)) {
+        fs.mkdirSync(targetCliDir, { recursive: true });
+    }
+
+    // Link or copy essential auth and config files
+    const essentialFiles = ["antigravity-oauth-token", "installation_id", "settings.json"];
+    for (const file of essentialFiles) {
+        const src = path.join(sourceCliDir, file);
+        const dest = path.join(targetCliDir, file);
+        if (fs.existsSync(src) && !fs.existsSync(dest)) {
+            try {
+                if (!isWindows) {
+                    fs.symlinkSync(src, dest);
+                } else {
+                    fs.copyFileSync(src, dest);
+                }
+            } catch {
+                try {
+                    fs.copyFileSync(src, dest);
+                } catch {
+                    // ignore
+                }
+            }
+        }
+    }
+
+    return botHome;
+}
+
+/**
  * Clean terminal ANSI color codes and extra whitespace.
  * @param {string} text
  * @returns {string}
@@ -77,11 +120,19 @@ export function generateAiReply({ prompt, abortSignal, timeout = 45000 }) {
             fs.mkdirSync(cwd, { recursive: true });
         }
 
+        const botHome = getIsolatedBotProfileDir();
+        const isolatedEnv = {
+            ...process.env,
+            HOME: botHome,
+            USERPROFILE: botHome,
+        };
+
         const child = execFile(
             agyBin,
             args,
             {
                 cwd,
+                env: isolatedEnv,
                 timeout,
                 signal: abortSignal,
                 maxBuffer: 10 * 1024 * 1024,
