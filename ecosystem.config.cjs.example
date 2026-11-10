@@ -22,11 +22,11 @@ module.exports = {
       node_args: "--experimental-vm-modules",
       env: {
         BOT_ID: "ai1",
-        BOT_NAME: "Tederby",
-        OWNER_NUMBER: "6287825136146",
+        BOT_NAME: "MyBot",
+        OWNER_NUMBER: "628xxxxxxxxxx",
         PREFIXES: "!.#/-",
         SPAM_DELAY: "3000",
-        PAIRING_NUMBER: "6287825136146",
+        // PAIRING_NUMBER: "628xxxxxxxxxx",
       },
     },
     // ── Add more bots below ─────────────────────────────────────

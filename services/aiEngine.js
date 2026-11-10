@@ -48,8 +48,8 @@ export function getIsolatedBotProfileDir() {
         fs.mkdirSync(targetCliDir, { recursive: true });
     }
 
-    // Link or copy essential auth and config files
-    const essentialFiles = ["antigravity-oauth-token", "installation_id", "settings.json"];
+    // Link or copy essential auth files only (do not copy host settings.json)
+    const essentialFiles = ["antigravity-oauth-token", "installation_id"];
     for (const file of essentialFiles) {
         const src = path.join(sourceCliDir, file);
         const dest = path.join(targetCliDir, file);
@@ -68,6 +68,23 @@ export function getIsolatedBotProfileDir() {
                 }
             }
         }
+    }
+
+    // Ensure bot profile has a strictly locked down settings.json denying dangerous tools
+    const botSettingsFile = path.join(targetCliDir, "settings.json");
+    const hardenedSettings = {
+        permissions: {
+            deny: ["command(*)", "edit_file(*)", "write_file(*)"],
+            allow: []
+        }
+    };
+    try {
+        if (fs.existsSync(botSettingsFile) && fs.lstatSync(botSettingsFile).isSymbolicLink()) {
+            fs.unlinkSync(botSettingsFile);
+        }
+        fs.writeFileSync(botSettingsFile, JSON.stringify(hardenedSettings, null, 2), "utf-8");
+    } catch {
+        // ignore
     }
 
     return botHome;
