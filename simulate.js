@@ -183,6 +183,7 @@ async function runSimulation() {
     // Simulate back-and-forth chat in SQLite
     await dispatchMessage("Halo apa kabar?", TEST_USER_NUM);
     await dispatchMessage("Halo juga, saya baik! Ada yang bisa dibantu?", TEST_BOT_NUM, true);
+    await dispatchMessage("Ini balasan otomatis dari AI sebelumnya\u200B", TEST_BOT_NUM, true);
     const { message: mh3 } = await dispatchMessage("Bisa tolong buatkan jadwal rapat?", TEST_USER_NUM);
 
     const promptObj = await buildAiPrompt({
@@ -197,6 +198,8 @@ async function runSimulation() {
     assert("Prompt generated successfully", typeof promptObj.prompt === "string" && promptObj.prompt.length > 0);
     assert("Prompt contains sliding window thread indices (#1, #2)", promptObj.prompt.includes("#1") && promptObj.prompt.includes("#2"));
     assert("Prompt preserves conversation context", promptObj.prompt.includes("Halo apa kabar") && promptObj.prompt.includes("jadwal rapat"));
+    assert("Prompt differentiates manual owner chat as 'Owner (Owner Langsung)'", promptObj.prompt.includes("Owner (Owner Langsung)"));
+    assert("Prompt differentiates AI userbot chat as 'Owner (AI Userbot)'", promptObj.prompt.includes("Owner (AI Userbot)"));
 
     // ── Test 7: Manual Override (Loop Breaker) ───────────────────────────
     console.log("\n🛑 7. Testing Manual Interrupt (Loop Breaker)...");

@@ -17,7 +17,7 @@ import { logger } from "./lib/logger.js";
 import { checkPermissions } from "./lib/middleware.js";
 import { isBanned, isGroupBanned, isUserGroupBanned, getActiveBotsInGroup, claimMessage, getGroupConfig, isRegistered, registerUser, isAiGlobalEnabled, getAiChatSettings, isUserAiIgnored, resolveUserId } from "./lib/database.js";
 import { logMessage } from "./lib/messageLogger.js";
-import { enqueueAiTrigger, handleManualInterrupt, isDebounceActive } from "./lib/aiQueue.js";
+import { enqueueAiTrigger, handleManualInterrupt, isDebounceActive, isAiMessage } from "./lib/aiQueue.js";
 import setting from "./setting.js";
 
 // ── Blocklist Cache (avoid network call per-message) ────────────────────────
@@ -60,7 +60,7 @@ let msgHandler = async (upsert, sock, message) => {
         logMessage(message);
 
         // ── Manual Override (User types manually → cancel AI queue) ──
-        if (message.key.fromMe) {
+        if (message.key.fromMe && !isAiMessage(message)) {
             handleManualInterrupt(message.chat);
         }
 

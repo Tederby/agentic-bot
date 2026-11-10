@@ -4,6 +4,16 @@ All notable changes to **WA-Bot-Engine** are documented in this file. This proje
 
 ---
 
+## [1.3.3] — 2026-11-10
+
+### Added
+- **Seamless AI vs Owner Message Discrimination (`lib/aiQueue.js`, `lib/aiContextBuilder.js`)**: Implemented invisible Unicode zero-width space (`\u200B`) steganography and an in-memory message ID ring cache to definitively distinguish AI-generated replies from manual account owner typing.
+- **SQLite `is_ai` Column & Migration (`lib/db.js`, `lib/database.js`)**: Added `is_ai INTEGER DEFAULT 0` column to `chat_messages` table with automatic database migration.
+- **Contextual Sender Labeling (`lib/aiContextBuilder.js`)**: Formats message history with distinct labels (`{ownerName} (Owner Langsung)` vs `{ownerName} (AI Userbot)`) and embeds system prompt guidelines preventing the AI from contradicting the owner's manual statements.
+- **Accurate Manual Interrupt Targeting (`handler.js`)**: Guarded `handleManualInterrupt` with `!isAiMessage(message)` so that outgoing AI userbot replies do not inadvertently abort subsequent debounce buffers or active execution queues.
+
+---
+
 ## [1.3.2] — 2026-11-10
 
 ### Fixed
