@@ -4,6 +4,16 @@ All notable changes to **WA-Bot-Engine** are documented in this file. This proje
 
 ---
 
+## [1.3.5] — 2026-11-10
+
+### Fixed
+- **Anti-False-Purge 401 Logged Out Guard (`index.js`)**: Implemented 1-retry verification cooldown (15s) for `401 / loggedOut` before permanently deleting session files, preventing transient handshake rejections during network flaps or PM2 restarts from obliterating valid session credentials.
+- **Dedicated Gateway 503 Throttling Backoff (`index.js`)**: Ported exponential backoff policy for `DisconnectReason.unavailableService` (503) scaling from 15s to 60s with an 8-attempt ceiling before graceful suspension, preventing aggressive reconnection attempts from provoking Meta gateway IP rate limits.
+- **Connection Closed (428) Socket Unbind Cooldown (`index.js`)**: Added relaxed cooldown delay (8s–30s) on `connectionClosed` (428) events to ensure WhatsApp server cleanly unbinds the dead socket before handshake re-initiation.
+- **PM2 Graceful Teardown Timing (`ecosystem.config.cjs`, `index.js`)**: Configured 3-second `kill_timeout` in PM2 ecosystem and refined TCP socket close timeout to 1s to ensure clean session termination without socket overlap.
+
+---
+
 ## [1.3.4] — 2026-11-10
 
 ### Added

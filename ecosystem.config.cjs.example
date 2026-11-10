@@ -20,6 +20,7 @@ module.exports = {
       name: "ai1",
       script: "./index.js",
       node_args: "--experimental-vm-modules",
+      kill_timeout: 3000,
       env: {
         BOT_ID: "ai1",
         BOT_NAME: "MyBot",

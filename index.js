@@ -87,15 +87,23 @@ const MAX_CYCLES = 3;
 /**
  * Calculate reconnect delay with exponential backoff.
  * @param {number} attempt    - Attempt number (1-indexed)
- * @param {boolean} isHard    - true for severe errors (loggedOut/401), false for soft errors
+ * @param {boolean|string|number} mode - "hard" (true), "throttle" (503), "cooldown" (428), or "light" (false)
  * @returns {number} delay in ms
  */
-function getBackoffDelay(attempt, isHard) {
-  if (isHard) {
-    // loggedOut/401: 5s → 10s → 20s → 40s → 60s (cap)
+function getBackoffDelay(attempt, mode) {
+  if (mode === "throttle" || mode === 503) {
+    // unavailableService/503 (Server throttling/overload): 15s → 25s → 35s → ... → 60s (cap)
+    return Math.min(15000 + (attempt - 1) * 10000, 60000);
+  }
+  if (mode === "cooldown" || mode === 428) {
+    // connectionClosed/428: Allow server-side socket release: 8s → 12s → 16s → ... → 30s (cap)
+    return Math.min(8000 + (attempt - 1) * 4000, 30000);
+  }
+  if (mode === true || mode === "hard") {
+    // Severe errors (multideviceMismatch, 403, 411): 5s → 10s → 20s → 40s → 60s (cap)
     return Math.min(5000 * Math.pow(2, attempt - 1), 60000);
   }
-  // Soft errors (timedOut, connectionClosed, etc): 3s → 5s → 7s → ... → 30s (cap)
+  // Soft errors (timedOut, restartRequired, etc): 3s → 5s → 7s → ... → 30s (cap)
   return Math.min(3000 + (attempt * 2000), 30000);
 }
 
@@ -127,8 +135,8 @@ async function gracefulShutdown(signal) {
     }
     currentSock = null;
   }
-  // Allow 2 seconds for cleanup before exit
-  setTimeout(() => process.exit(0), 2000);
+  // Allow 1 second for TCP FIN packets to flush cleanly before exit
+  setTimeout(() => process.exit(0), 1000);
 }
 
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
@@ -264,9 +272,20 @@ function handleConnectionUpdate(update, sock) {
       currentSock = null;
     }
 
-    // ── Immediate 401 Logged Out Session Purge & Suspension ───
+    // ── 401 Logged Out Handling (Transient Retry Guard) ─────────
     if (status === 401 || reason === "loggedOut") {
-      console.log(`${TAG} | 🛑 Session logged out (401 / loggedOut). Purging session directory...`);
+      reconnectAttempts++;
+      if (reconnectAttempts <= 1) {
+        // Allow 1 retry with an extended 15s cooldown to verify if 401 was a transient gateway/handshake glitch
+        const delay = 15000;
+        console.log(
+          `${TAG} | ⚠️ Received loggedOut (401). Verifying session authenticity (retry ${reconnectAttempts}/1) in ${delay / 1000}s before purging...`
+        );
+        setTimeout(connectToWhatsApp, delay);
+        return;
+      }
+
+      console.log(`${TAG} | 🛑 Session confirmed logged out (401 / loggedOut). Purging session directory...`);
       try {
         if (fs.existsSync(SESSION_DIR)) {
           fs.rmSync(SESSION_DIR, { recursive: true, force: true });
@@ -364,11 +383,32 @@ function handleConnectionUpdate(update, sock) {
       );
       setTimeout(connectToWhatsApp, delay);
 
+    } else if (reason === "unavailableService" || status === 503) {
+      // Server Unavailable / Throttling (503): WhatsApp gateway overload or handshake throttle.
+      // Use relaxed backoff (15s–60s) to allow gateway recovery before reconnecting.
+      reconnectAttempts++;
+      const delay = getBackoffDelay(reconnectAttempts, "throttle");
+      console.log(
+        `${TAG} | WhatsApp gateway unavailable/throttled (503). Waiting for server recovery (${reconnectAttempts}/8) in ${delay / 1000}s...`
+      );
+
+      if (reconnectAttempts >= 8) {
+        reconnectAttempts = 0;
+        return suspendProgram(
+          "WhatsApp gateway unavailable (503) 8x in a row. " +
+          `Meta server maintenance or IP throttling suspected. Run 'pm2 restart ${BOT_ID}' later.`
+        );
+      }
+      setTimeout(connectToWhatsApp, delay);
+
     } else {
       // Soft errors: timedOut, connectionClosed, restartRequired, etc.
       // Usually safe to retry immediately.
       reconnectAttempts++;
-      const delay = getBackoffDelay(reconnectAttempts, false);
+      const isConnectionClosed = reason === "connectionClosed" || status === 428;
+      const delay = isConnectionClosed
+        ? getBackoffDelay(reconnectAttempts, "cooldown")
+        : getBackoffDelay(reconnectAttempts, false);
       console.log(`${TAG} | Reconnecting in ${delay / 1000}s... (attempt ${reconnectAttempts})`);
 
       // Safety net: prevent infinite loop on persistent soft errors
