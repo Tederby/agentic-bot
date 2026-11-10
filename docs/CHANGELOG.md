@@ -4,6 +4,16 @@ All notable changes to **WA-Bot-Engine** are documented in this file. This proje
 
 ---
 
+## [1.3.2] — 2026-11-10
+
+### Fixed
+- **Socket Close Race Condition Guard (`index.js`)**: Enforced explicit socket identity verification (`currentSock === sock`) on `connection === "close"` events to prevent delayed trailing close events from prior sockets prematurely destroying the active socket reference and triggering false `401 loggedOut` session revocations.
+- **Fast Transient Session Stream Recovery (`index.js`)**: Aligned `badSession` (500) reconnect backoff delay to soft delay mode (`3s`, `5s`) for rapid stream restoration without triggering timeout ceilings.
+- **Pairing Number E.164 Normalization (`index.js`)**: Extended local phone number normalization to prepend `setting.defaultCountryCode` when input starts with `8...` without a leading `0` or country code.
+- **Baileys Dependency Locking & Patch Application (`package.json`)**: Locked Baileys dependency to exact version `"7.0.0-rc13"` ensuring `patches/baileys+7.0.0-rc13.patch` applies cleanly via `patch-package` during installation and eliminating postinstall errors.
+
+---
+
 ## [1.3.1] — 2026-11-09
 
 ### Added

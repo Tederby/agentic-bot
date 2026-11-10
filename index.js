@@ -216,6 +216,8 @@ function handleConnectionUpdate(update, sock) {
           let number = setting.pairingNumber.replace(/[^0-9]/g, "");
           if (number.startsWith("0")) {
             number = setting.defaultCountryCode + number.slice(1);
+          } else if (number.startsWith("8")) {
+            number = setting.defaultCountryCode + number;
           }
           
           const code = await sock.requestPairingCode(number);
@@ -251,7 +253,7 @@ function handleConnectionUpdate(update, sock) {
     }
 
     // Clean up current socket listeners immediately on close
-    if (currentSock) {
+    if (currentSock === sock) {
       try {
         currentSock.ev.removeAllListeners();
         currentSock.ws?.close();
@@ -285,7 +287,7 @@ function handleConnectionUpdate(update, sock) {
     if (status === 500 || reason === "badSession") {
       reconnectAttempts++;
       if (reconnectAttempts <= 2) {
-        const delay = getBackoffDelay(reconnectAttempts, true);
+        const delay = getBackoffDelay(reconnectAttempts, false);
         console.log(
           `${TAG} | ⚠️ Transient session corruption (500 badSession). ` +
           `Retrying (${reconnectAttempts}/2) in ${delay / 1000}s...`
