@@ -174,15 +174,15 @@ let msgHandler = async (upsert, sock, message) => {
                 if (isChatEnabled) {
                     const isIgnored = ctx.isGroup && isUserAiIgnored(message.chat, ctx.sender);
                     if (!isIgnored) {
-                        const isChatDebouncing = isDebounceActive(message.chat);
+                        const isChatDebouncing = isDebounceActive(message.chat, ctx.sender, ctx.isGroup);
                         let isTriggered = false;
 
                         if (!ctx.isGroup) {
                             // DM: All incoming messages from partner trigger AI
                             isTriggered = true;
                         } else if (isChatDebouncing) {
-                            // Group: Debounce session is ALREADY ACTIVE in this group!
-                            // Every incoming chat message extends the idle timer and gets bundled!
+                            // Group: Debounce session is ALREADY ACTIVE for this specific user!
+                            // Subsequent chat messages from this user extend the idle timer and get bundled!
                             isTriggered = true;
                         } else if ((chatSettings?.mode || "trigger") === "all") {
                             // Group: Mode "all" responds to every chat message

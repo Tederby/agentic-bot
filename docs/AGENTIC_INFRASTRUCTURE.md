@@ -106,8 +106,9 @@ WhatsApp group chats are non-linear (multiple conversations occur concurrently v
 
 ### B. Per-Chat Debounce & FIFO Mutex Queue ([`lib/aiQueue.js`](../lib/aiQueue.js))
 Human WhatsApp users often send multiple short messages in rapid succession ("P", "Bro", "Where are you?").
-* **Debounce Buffer (3.5s)**: Accumulates consecutive messages from a chat into a single aggregated prompt.
-* **FIFO Mutex Lock**: Ensures only one `agy` inference runs per chat at any time. New triggers queue in memory without race conditions. Prunes empty queue keys automatically to prevent memory leaks.
+* **Debounce Buffer (3.5s)**: Accumulates consecutive messages into a single aggregated prompt. In groups, debounce buffers are strictly isolated per sender (`(chatJid + sender)`), ensuring casual cross-talk from other participants does not hijack or extend active debounce sessions.
+* **Smart Quoted Reply Targeting**: In DMs, replies are sent unquoted (`quoted: undefined`) for natural human-like flow. In groups, replies target the initial triggering message (`firstTriggerMessage`), preventing replies from quoting irrelevant trailing messages (e.g. "p" or "wkwk").
+* **FIFO Mutex Lock**: Ensures only one `agy` inference runs per chat at any time. Triggers from distinct users in the same group queue cleanly in memory without race conditions or swallowed messages.
 * **WhatsApp Presence Simulation**: Automatically triggers `sock.sendPresenceUpdate('composing', chatJid)` with an 8-second recurring heartbeat during processing, resetting to `'paused'` upon completion.
 * **Instant Bot Response Persistence**: Immediately logs the bot's own response into `chat_messages` upon dispatch for instant context synchronization.
 * **Manual Interrupt (Override)**: If the account owner types a message manually (`fromMe: true`) in that chat, any pending debounce timer is cleared and any active `agy` child process is immediately terminated via `AbortController`.

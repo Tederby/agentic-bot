@@ -4,6 +4,16 @@ All notable changes to **WA-Bot-Engine** are documented in this file. This proje
 
 ---
 
+## [1.3.4] — 2026-11-10
+
+### Added
+- **Smart Quoted Reply Targeting (`lib/aiQueue.js`)**: Configured contextual reply targeting where DMs send unquoted messages (`quoted: undefined`) for natural conversational flow, while group messages target the original triggering message (`firstTriggerMessage`) instead of the tail message.
+- **Per-Sender Group Debounce Isolation (`lib/aiQueue.js`, `handler.js`)**: Isolated group debounce buffers by `(chatJid + sender)` so that rapid typing is bundled strictly per user, preventing casual group cross-talk from hijacking or extending another user's debounce session.
+- **Independent Concurrent Triggers via FIFO Queue (`lib/aiQueue.js`, `handler.js`)**: Handled triggers from different users in the same group as distinct queue tasks dispatched sequentially via the per-chat mutex queue (`chatQueues`).
+- **Comprehensive Simulation Tests (`simulate.js`)**: Added test coverage validating debounce key isolation, group multi-user buffer separation, and manual interrupt cleanup.
+
+---
+
 ## [1.3.3] — 2026-11-10
 
 ### Added

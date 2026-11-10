@@ -7,7 +7,7 @@ import { Messages } from "./lib/Messages.js";
 import db from "./lib/db.js";
 import { getUser, isAiGlobalEnabled, getAiChatSettings, setAiGlobalConfig, setAiChatSettings } from "./lib/database.js";
 import { buildAiPrompt } from "./lib/aiContextBuilder.js";
-import { handleManualInterrupt } from "./lib/aiQueue.js";
+import { handleManualInterrupt, isDebounceActive, getDebounceKey, enqueueAiTrigger } from "./lib/aiQueue.js";
 import setting from "./setting.js";
 
 async function runSimulation() {
@@ -224,6 +224,34 @@ async function runSimulation() {
         console.error("agy bridge error:", e.message);
     }
     assert("Antigravity CLI (agy) responded correctly", typeof agyReply === "string" && agyReply.toUpperCase().includes("READY"));
+
+    // ── Test 9: Debounce Key Isolation & Target Quoted Logic ───────────────
+    console.log("\n⚡ 9. Testing Debounce Isolation & Quoted Logic...");
+    const dmKey = getDebounceKey("6282222222222@s.whatsapp.net", "6282222222222@s.whatsapp.net", false);
+    const grpUserAKey = getDebounceKey("120363041234567890@g.us", "6282222222222@s.whatsapp.net", true);
+    const grpUserBKey = getDebounceKey("120363041234567890@g.us", "6283333333333@s.whatsapp.net", true);
+
+    assert("DM debounce key is isolated by chatJid", dmKey === "6282222222222@s.whatsapp.net");
+    assert("Group debounce keys are isolated per user (chatJid:sender)", grpUserAKey !== grpUserBKey && grpUserAKey.includes("6282222222222"));
+
+    // Test enqueueing trigger for User A in group
+    const mockGroupChat = "120363041234567890@g.us";
+    const userAJid = "6282222222222@s.whatsapp.net";
+    const userBJid = "6283333333333@s.whatsapp.net";
+
+    const { message: mockMsgA } = createMockUpsert("@bot tolong ini", "6282222222222", false, true);
+    enqueueAiTrigger({
+        message: mockMsgA,
+        sock: mockSock,
+        ctx: { sender: userAJid, isGroup: true, pushname: "UserA" }
+    });
+
+    assert("User A has active debounce in group", isDebounceActive(mockGroupChat, userAJid, true) === true);
+    assert("User B does NOT inherit User A's debounce buffer", isDebounceActive(mockGroupChat, userBJid, true) === false);
+
+    // Clean up active debounce
+    handleManualInterrupt(mockGroupChat);
+    assert("handleManualInterrupt clears group debounce buffers", isDebounceActive(mockGroupChat, userAJid, true) === false);
 
     // ── Cleanup Test Artifacts ──────────────────────────────────────────
     try {
